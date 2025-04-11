@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { Box } from "@/components/ui/box";
 import { Input, InputField, InputIcon } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
-import {useRouter } from "expo-router";
+import { router, useRouter } from "expo-router";
 import { Card } from "@/components/ui/card";
 import { Image } from "@/components/ui/image";
 import { VStack } from "@/components/ui/vstack";
-import { Button, ButtonText } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import React from 'react';
 import { useFirestore } from '@/context/storageFirebase';
@@ -16,6 +16,7 @@ import { Center } from "@/components/ui/center";
 import { SearchIcon } from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from "react-native";
 
 // Custom hook useDebounce để trì hoãn giá trị
 function useDebounce(value: string, delay: number): string {
@@ -59,19 +60,64 @@ interface Category {
 function ListProductList({ product }: { product: Product }) {
   const { user } = useAuth();
   const router = useRouter();
+  const { getDocuments, addDocument, updateDocument } = useFirestore();
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      // Nếu chưa đăng nhập, chuyển đến trang đăng nhập
-      router.push('/login');
+  const addToCart = async () => {
+    if (!product || !user) {
+      Alert.alert(
+        "Thông báo",
+        "Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng",
+        [
+          { text: "Hủy", style: "cancel" },
+          { text: "Đăng nhập", onPress: () => router.push('/login') }
+        ]
+      );
       return;
     }
-  }, [user]);
-  const handleProductPress = async () => {
-
 
     try {
-      await AsyncStorage.setItem('viewedProduct', JSON.stringify(product));
+      setLoading(true);
+      const storeName = await AsyncStorage.getItem('selectedVendorId');
+      if (!storeName) {
+        Alert.alert("Lỗi", "Không tìm thấy thông tin cửa hàng");
+        return;
+      }
+
+      const cartItems = await getDocuments('orders');
+      const cartItem = cartItems.find(item =>
+        item.userId === user.uid &&
+        item.productId === product.id
+      );
+
+      if (cartItem) {
+        await updateDocument('orders', cartItem.id, {
+          quantity: cartItem.quantity + 1,
+          updatedAt: new Date()
+        });
+        Alert.alert("Cập nhật", `${product.name} đã được cập nhật trong giỏ hàng!`);
+      } else {
+        const newOrder = {
+          userId: user.uid,
+          productId: product.id,
+          quantity: 1,
+          storeName: storeName,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        await addDocument('orders', newOrder);
+        Alert.alert("Thành công", `${product.name} đã được thêm vào giỏ hàng!`);
+      }
+    } catch (error) {
+      console.error("Lỗi khi thêm vào giỏ hàng:", error);
+      Alert.alert("Lỗi", "Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại sau.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProductPress = async () => {
+    try {
       router.push(`/product/${product.id}`);
     } catch (error) {
       console.error('Lỗi khi lưu thông tin sản phẩm:', error);
@@ -103,12 +149,14 @@ function ListProductList({ product }: { product: Product }) {
             <Heading size="md" className="text-blue-600 font-bold">
               {product.price.toLocaleString('vi-VN')}đ
             </Heading>
-            <Button 
-              variant="solid" 
-              size="sm" 
+            <Button
+              variant="solid"
+              size="sm"
               className="bg-blue-500 rounded-full px-3"
+              onPress={addToCart}
+              disabled={loading}
             >
-              <ButtonText className="text-white text-xs">Mua</ButtonText>
+              <Text className="text-white text-xs">Mua</Text>
             </Button>
           </View>
         </VStack>
@@ -128,7 +176,8 @@ export default function TabOneScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 1000);
-  
+  const vendorId = AsyncStorage.getItem('selectedVendorId');
+
   useEffect(() => {
     loadData();
   }, []);
@@ -154,8 +203,8 @@ export default function TabOneScreen() {
 
       setCategories(formattedCategories);
       setParentCategories([
-        { 
-          id: 'all', 
+        {
+          id: 'all',
           name: 'Tất cả',
           createdAt: new Date(),
           updatedAt: new Date()
@@ -164,20 +213,66 @@ export default function TabOneScreen() {
       ]);
       setChildCategories(children);
 
-      // Tải sản phẩm
-      const productsData = await getDocuments('products');
-      const formattedProducts: Product[] = productsData.map((product: any) => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        stock: product.stock,
-        images: product.images,
-        categories: product.categories,
-        createdAt: product.createdAt?.toDate() || new Date(),
-        updatedAt: product.updatedAt?.toDate() || new Date()
-      }));
-      setProducts(formattedProducts);
+      // 1. Lấy vendorId từ AsyncStorage
+      const vendorId = await AsyncStorage.getItem('selectedVendorId');
+      console.log('🔑 Vendor ID from AsyncStorage:', vendorId);
+
+      if (vendorId) {
+        // 2. Lấy tất cả documents từ vendor_products trùng với vendorId
+        const vendorProductsData = await getDocuments('vendor_products');
+        const vendorProductDocs = vendorProductsData.filter(doc => doc.id === vendorId);
+        console.log('📄 Vendor Product Documents:', vendorProductDocs);
+
+        if (vendorProductDocs.length > 0) {
+          // 3. Lấy danh sách id sản phẩm từ tất cả documents
+          const vendorProductsList = vendorProductDocs.map(doc => ({
+            products: doc.products || '', // Chuỗi tên sản phẩm
+            stock: doc.stock || 0, // Stock từ document
+          }));
+          console.log('📦 Vendor Products List:', vendorProductsList);
+
+          // Kiểm tra xem vendorProductsList có rỗng không
+          if (vendorProductsList.length === 0) {
+            console.log('⚠️ Warning: No products found in vendorProducts');
+            setProducts([]); // Trả về mảng rỗng nếu không có sản phẩm
+            return;
+          }
+
+          // 4. Lấy tất cả sản phẩm từ collection products
+          const allProducts = await getDocuments('products');
+          console.log('🏪 All Products:', allProducts);
+
+          // 5. Lọc sản phẩm trùng với tên từ vendorProducts và format
+          const filteredProducts = allProducts
+            .filter(product =>
+              vendorProductsList.some(vp => vp.products === product.name)
+            )
+            .map(product => {
+              // Tìm document tương ứng trong vendorProductsList để lấy stock
+              const vendorProduct = vendorProductsList.find(vp => vp.products === product.name);
+              console.log(vendorProduct?.stock)
+              // Log để debug nếu không tìm thấy vendorProduct
+              if (!vendorProduct) {
+                console.log(`⚠️ No vendorProduct found for product name: ${product.name}`);
+              }
+
+              return {
+                id: product.id,
+                name: product.name,
+                description: product.description,
+                price: product.price,
+                stock: vendorProduct?.stock, // Lấy stock từ document, mặc định là 0 nếu không tìm thấy
+                images: product.images,
+                categories: product.categories,
+                createdAt: product.createdAt?.toDate() || new Date(),
+                updatedAt: product.updatedAt?.toDate() || new Date(),
+              };
+            });
+
+          console.log('✅ Final Filtered Products:', filteredProducts);
+          setProducts(filteredProducts);
+        }
+      }
     } catch (error) {
       console.error('Lỗi khi tải dữ liệu:', error);
     } finally {
@@ -192,12 +287,12 @@ export default function TabOneScreen() {
 
   // Lọc sản phẩm theo từ khóa tìm kiếm và danh mục
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = 
+    const matchesSearch =
       product.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
       product.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
-    
+
     let matchesCategory = false;
-    
+
     // Nếu có chọn danh mục con, chỉ lọc theo danh mục con
     if (selectedChild) {
       matchesCategory = product.categories && product.categories.includes(selectedChild);
@@ -248,11 +343,19 @@ export default function TabOneScreen() {
             </Heading>
             <Text className="text-gray-500 text-sm">Tìm kiếm sản phẩm yêu thích</Text>
           </VStack>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full bg-white border-gray-200"
+            onPress={() => router.push('/vendors/vendor')}
+          > <Text>lựa chọn cửa hàng </Text>
+          </Button>
+
         </View>
 
-        <Input 
-          className="mb-3 bg-white rounded-xl shadow-sm" 
-          variant="outline" 
+        <Input
+          className="mb-3 bg-white rounded-xl shadow-sm"
+          variant="outline"
           size="md"
         >
           <InputIcon>
@@ -268,8 +371,8 @@ export default function TabOneScreen() {
 
         <VStack space="sm">
           {/* Danh mục cha */}
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             className="mb-2"
           >
@@ -279,22 +382,21 @@ export default function TabOneScreen() {
                   key={category.id}
                   variant={selectedParent === category.id ? "solid" : "outline"}
                   size="sm"
-                  className={`rounded-full ${
-                    selectedParent === category.id 
-                      ? 'bg-blue-500 border-blue-500' 
-                      : 'bg-white border-gray-200'
-                  }`}
+                  className={`rounded-full ${selectedParent === category.id
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'bg-white border-gray-200'
+                    }`}
                   onPress={() => handleSelectParent(category.id)}
                 >
-                  <ButtonText 
+                  <Text
                     className={
-                      selectedParent === category.id 
-                        ? 'text-white' 
+                      selectedParent === category.id
+                        ? 'text-white'
                         : 'text-gray-600'
                     }
                   >
                     {category.name}
-                  </ButtonText>
+                  </Text>
                 </Button>
               ))}
             </View>
@@ -302,8 +404,8 @@ export default function TabOneScreen() {
 
           {/* Danh mục con */}
           {selectedParent && selectedParent !== 'all' && filteredChildCategories.length > 0 && (
-            <ScrollView 
-              horizontal 
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               className="mb-3"
             >
@@ -313,22 +415,21 @@ export default function TabOneScreen() {
                     key={category.id}
                     variant={selectedChild === category.id ? "solid" : "outline"}
                     size="sm"
-                    className={`rounded-full ${
-                      selectedChild === category.id 
-                        ? 'bg-blue-500 border-blue-500' 
-                        : 'bg-white border-gray-200'
-                    }`}
+                    className={`rounded-full ${selectedChild === category.id
+                      ? 'bg-blue-500 border-blue-500'
+                      : 'bg-white border-gray-200'
+                      }`}
                     onPress={() => handleSelectChild(category.id)}
                   >
-                    <ButtonText 
+                    <Text
                       className={
-                        selectedChild === category.id 
-                          ? 'text-white' 
+                        selectedChild === category.id
+                          ? 'text-white'
                           : 'text-gray-600'
                       }
                     >
                       {category.name}
-                    </ButtonText>
+                    </Text>
                   </Button>
                 ))}
               </View>

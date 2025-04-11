@@ -157,7 +157,7 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   return (
     <AuthContext.Provider value={value}>
       {loading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text>Loading...</Text>
         </View>
       ) : (

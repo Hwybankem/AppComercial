@@ -17,6 +17,7 @@ import { Input, InputField, InputIcon, InputSlot } from "@/components/ui/input";
 import * as ImagePicker from 'expo-image-picker';
 import { uploadToImgBB } from '@/services/imgbbService';
 import timeParse from '@/components/utils/timeParse';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Product {
   id: string;
@@ -35,6 +36,7 @@ interface Order {
   userId: string;
   productId: string;
   quantity: number;
+  storeName: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,24 +70,31 @@ export default function ProductsDetail() {
   const loadProduct = async () => {
     try {
       setLoading(true);
+      // Lấy thông tin từ vendor_products
+      const vendorProducts = await getDocuments('vendor_products');
+      console.log('All vendor products:', vendorProducts);
+      
       // Lấy sản phẩm từ Firestore
       const productData = await getDocument('products', String(id));
       console.log('Product from Firestore:', productData);
-      
+
       if (productData) {
+        // Tìm vendor product dựa vào products field thay vì id
+        const vendorProduct = vendorProducts.find(doc => doc.products === productData.name);
+        console.log('Found vendor product:', vendorProduct);
+
         const formattedProduct: Product = {
           id: productData.id,
           name: productData.name || '',
           description: productData.description || '',
           price: productData.price || 0,
-          stock: productData.stock || 0,
+          stock: vendorProduct ? vendorProduct.stock : 0, // Kiểm tra vendorProduct trước khi truy cập stock
           categories: productData.categories || [],
           images: Array.isArray(productData.images) ? productData.images : [],
           createdAt: productData.createdAt?.toDate() || new Date(),
           updatedAt: productData.updatedAt?.toDate() || new Date()
         };
         setProduct(formattedProduct);
-    
       } else {
         console.log('Không tìm thấy sản phẩm với ID:', id);
         setProduct(null);
@@ -102,16 +111,7 @@ export default function ProductsDetail() {
     console.log('Current Product State:', product);
   }, [product]);
 
-  const renderImageItem = ({ item, index }: { item: string; index: number }) => (
-    <View style={{ width: screenWidth }}>
-      <Image
-        source={{ uri: item }}
-        className="w-full h-full"
-        alt={`${product?.name || 'Product'} image ${index + 1}`}
-        resizeMode="contain"
-      />
-    </View>
-  );
+
 
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
@@ -132,24 +132,31 @@ export default function ProductsDetail() {
       );
       return;
     }
-  
+
     try {
+      // Lấy tên cửa hàng từ AsyncStorage
+      const storeName = await AsyncStorage.getItem('selectedVendorId');
+      if (!storeName) {
+        Alert.alert("Lỗi", "Không tìm thấy thông tin cửa hàng");
+        return;
+      }
+
       const wishlistItems = await getDocuments('wishlist');
       const wishlistItem = wishlistItems.find(item =>
         item.userId === user.uid &&
         item.productId === product.id
       ) as Wishlist | undefined;
-  
+
       // Xóa nếu có trong wishlist
       if (wishlistItem) {
         await deleteDocument('wishlist', wishlistItem.id!);
       }
-  
+
       const cartItems = await getDocuments('orders');
       console.log('cartItems', cartItems);
       const cartItem = cartItems.find(item =>
         item.userId === user.uid &&
-        item.productId === product.id 
+        item.productId === product.id
       ) as Order | undefined;
       console.log('cartItem', cartItem);
       if (cartItem) {
@@ -163,6 +170,7 @@ export default function ProductsDetail() {
           userId: user.uid,
           productId: product.id,
           quantity: 1,
+          storeName: storeName,
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -174,7 +182,7 @@ export default function ProductsDetail() {
       Alert.alert("Lỗi", "Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại sau.");
     }
   };
-  
+
 
   const addToWishlist = async () => {
     if (!product || !user) {
@@ -183,8 +191,8 @@ export default function ProductsDetail() {
         "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích",
         [
           { text: "Hủy", style: "cancel" },
-          { 
-            text: "Đăng nhập", 
+          {
+            text: "Đăng nhập",
             onPress: () => router.push('/login')
           }
         ]
@@ -195,9 +203,9 @@ export default function ProductsDetail() {
     try {
       // Kiểm tra xem sản phẩm đã có trong giỏ hàng chưa
       const cartItems = await getDocuments('orders');
-      const cartItem = cartItems.find(item => 
-        item.userId === user.uid && 
-        item.productId === product.id 
+      const cartItem = cartItems.find(item =>
+        item.userId === user.uid &&
+        item.productId === product.id
       ) as Order | undefined;
 
       if (cartItem) {
@@ -205,8 +213,8 @@ export default function ProductsDetail() {
       } else {
         // Thêm mới vào danh sách yêu thích
         const wishlistItems = await getDocuments('wishlist');
-        const wishlistItem = wishlistItems.find(item => 
-          item.userId === user.uid && 
+        const wishlistItem = wishlistItems.find(item =>
+          item.userId === user.uid &&
           item.productId === product.id
         ) as Wishlist | undefined;
 
@@ -313,8 +321,8 @@ export default function ProductsDetail() {
 
   return (
     <Box className="flex-1 bg-gray-50">
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           headerShown: true,
           title: '',
           headerLeft: () => (
@@ -327,9 +335,9 @@ export default function ProductsDetail() {
               </Button>
             </Link>
           ),
-        }} 
+        }}
       />
-      
+
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hình ảnh sản phẩm */}
         <View className="w-full aspect-square bg-white">
@@ -365,9 +373,8 @@ export default function ProductsDetail() {
               {product.images.map((_, index) => (
                 <View
                   key={index}
-                  className={`w-2 h-2 rounded-full ${
-                    currentImageIndex === index ? 'bg-blue-500' : 'bg-gray-300'
-                  }`}
+                  className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-blue-500' : 'bg-gray-300'
+                    }`}
                 />
               ))}
             </View>
@@ -379,7 +386,7 @@ export default function ProductsDetail() {
           <Text className="text-2xl font-bold text-gray-800 mb-2">
             {product.name}
           </Text>
-          
+
           <Heading size="2xl" className="text-blue-600 mb-4">
             {product.price.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}
           </Heading>
@@ -410,7 +417,7 @@ export default function ProductsDetail() {
 
           {/* Bình luận */}
           <Heading size="lg" className="mb-4">Bình luận</Heading>
-          
+
           <Box className="flex-row items-center mt-4">
             <Input className="flex-1 mr-2">
               <InputField
@@ -426,7 +433,7 @@ export default function ProductsDetail() {
               <ButtonText className="text-white">Gửi</ButtonText>
             </Button>
           </Box>
-          
+
           {reviewImages.length > 0 && (
             <Box className="flex-row flex-wrap mt-2">
               {reviewImages.map((image, index) => (
@@ -446,7 +453,7 @@ export default function ProductsDetail() {
               ))}
             </Box>
           )}
-          
+
           {reviews.length > 0 ? (
             reviews.map((review: any, index) => (
               <Box key={index} className="mb-4 p-3 bg-gray-100 rounded-lg mt-4">
@@ -467,7 +474,7 @@ export default function ProductsDetail() {
               <Text className="text-sm text-gray-500">Chưa có bình luận nào</Text>
             </Box>
           )}
-          
+
           <Box className="h-20"></Box>
         </VStack>
       </ScrollView>
@@ -481,7 +488,7 @@ export default function ProductsDetail() {
           >
             <View className="flex-row items-center space-x-2">
               <Feather name="shopping-cart" size={20} color="#fff" className="mr-2" />
-              <ButtonText className="text-white">cart</ButtonText>
+              <Text className="text-white">Cart</Text>
             </View>
           </Button>
 
@@ -491,7 +498,7 @@ export default function ProductsDetail() {
           >
             <View className="flex-row items-center space-x-2">
               <Feather name="heart" size={20} color="#fff" className="mr-2" />
-              <ButtonText className="text-white">Wishlist</ButtonText>
+              <Text className="text-white">Wishlist</Text>
             </View>
           </Button>
         </View>
