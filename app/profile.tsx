@@ -1,18 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Box } from '@/components/ui/box';
-import { Button, ButtonText, ButtonIcon } from '@/components/ui/button';
-import { Input, InputField } from '@/components/ui/input';
-import { Text } from '@/components/ui/text';
-import { VStack } from '@/components/ui/vstack';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { Center } from '@/components/ui/center';
-import { Image } from '@/components/ui/image';
-import { ScrollView, View, TouchableOpacity } from 'react-native';
 import { useFirestore } from '@/context/storageFirebase';
-import { EditIcon } from '@/components/ui/icon';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadToImgBB } from '@/services/imgbbService';
+import { Ionicons } from '@expo/vector-icons';
 
 interface UserData {
   address: string;
@@ -39,7 +32,6 @@ export default function ProfileScreen() {
       if (user?.uid) {
         try {
           const userData = await getDocument('users', user.uid);
-          console.log('userData', userData);
           if (userData) {
             setFormData({
               email: userData.username || '',
@@ -125,126 +117,268 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <Box className="bg-blue-500 h-40 rounded-b-[40px] shadow-lg">
-        <View className="absolute right-4 top-4 flex-row space-x-2">
-          <Button
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.headerButton}
             onPress={() => setIsEditing(!isEditing)}
-            variant="outline"
-            size="sm"
-            className="bg-white/20 border-white rounded-full"
           >
-            <ButtonIcon as={EditIcon} color="white" />
-            <ButtonText className="text-white text-xs ml-1">
+            <Ionicons name="pencil" size={16} color="white" />
+            <Text style={styles.headerButtonText}>
               {isEditing ? 'Hủy' : 'Sửa thông tin'}
-            </ButtonText>
-          </Button>
-          <Button
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
             onPress={handleLogout}
-            variant="outline"
-            size="sm"
-            className="bg-white/20 border-white rounded-full"
           >
-            <ButtonText className="text-white text-xs">Đăng xuất</ButtonText>
-          </Button>
+            <Text style={styles.headerButtonText}>Đăng xuất</Text>
+          </TouchableOpacity>
         </View>
-      </Box>
+      </View>
 
-      <Box className="px-4 -mt-20">
-        <Center>
-          <VStack space="xl" className="w-full max-w-sm">
-            <View className="relative self-center">
-              <Box className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg">
-                {formData.avatar ? (
-                  <Image 
-                    source={{ uri: formData.avatar }}
-                    alt="User Avatar"
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <Box className="w-full h-full bg-gray-200 items-center justify-center">
-                    <Text className="text-gray-500">No Image</Text>
-                  </Box>
-                )}
-              </Box>
-              <TouchableOpacity 
-                onPress={handleUpdateAvatar}
-                className="absolute bottom-0 right-0 bg-blue-500 p-2 rounded-full border-2 border-white"
-              >
-                <EditIcon color="white" />
-              </TouchableOpacity>
-            </View>
-
-            <VStack space="md" className="bg-white rounded-2xl p-4 shadow-sm">
-              <View className="border-b border-gray-100 pb-3">
-                <Text className="text-sm text-gray-500 mb-1">Email</Text>
-                <Text className="text-base text-gray-800">{formData.email}</Text>
+      <View style={styles.content}>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatarWrapper}>
+            {formData.avatar ? (
+              <Image 
+                source={{ uri: formData.avatar }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarPlaceholderText}>No Image</Text>
               </View>
+            )}
+          </View>
+          <TouchableOpacity 
+            style={styles.editAvatarButton}
+            onPress={handleUpdateAvatar}
+          >
+            <Ionicons name="pencil" size={16} color="white" />
+          </TouchableOpacity>
+        </View>
 
-              <View className="border-b border-gray-100 pb-3">
-                <Text className="text-sm text-gray-500 mb-1">Họ và tên</Text>
-                {isEditing ? (
-                  <Input>
-                    <InputField
-                      value={formData.fullName}
-                      onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
-                    />
-                  </Input>
-                ) : (
-                  <Text className="text-base text-gray-800">{formData.fullName}</Text>
-                )}
-              </View>
+        <View style={styles.infoContainer}>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Email</Text>
+            <Text style={styles.infoValue}>{formData.email}</Text>
+          </View>
 
-              <View className="border-b border-gray-100 pb-3">
-                <Text className="text-sm text-gray-500 mb-1">Số điện thoại</Text>
-                {isEditing ? (
-                  <Input>
-                    <InputField
-                      value={formData.phone}
-                      onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-                      keyboardType="phone-pad"
-                    />
-                  </Input>
-                ) : (
-                  <Text className="text-base text-gray-800">{formData.phone}</Text>
-                )}
-              </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Họ và tên</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.fullName}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
+              />
+            ) : (
+              <Text style={styles.infoValue}>{formData.fullName}</Text>
+            )}
+          </View>
 
-              <View className="border-b border-gray-100 pb-3">
-                <Text className="text-sm text-gray-500 mb-1">Địa chỉ</Text>
-                {isEditing ? (
-                  <Input>
-                    <InputField
-                      value={formData.address}
-                      onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-                      multiline
-                      numberOfLines={2}
-                    />
-                  </Input>
-                ) : (
-                  <Text className="text-base text-gray-800">{formData.address}</Text>
-                )}
-              </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Số điện thoại</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.phone}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+                keyboardType="phone-pad"
+              />
+            ) : (
+              <Text style={styles.infoValue}>{formData.phone}</Text>
+            )}
+          </View>
 
-              {error ? (
-                <Text className="text-red-500 text-center">{error}</Text>
-              ) : null}
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Địa chỉ</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                value={formData.address}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+                multiline
+                numberOfLines={2}
+              />
+            ) : (
+              <Text style={styles.infoValue}>{formData.address}</Text>
+            )}
+          </View>
 
-              {isEditing && (
-                <Button
-                  onPress={handleUpdateProfile}
-                  disabled={loading}
-                  className="bg-blue-500 rounded-full mt-4"
-                >
-                  <ButtonText className="text-white">
-                    {loading ? 'Đang cập nhật...' : 'Lưu thay đổi'}
-                  </ButtonText>
-                </Button>
-              )}
-            </VStack>
-          </VStack>
-        </Center>
-      </Box>
+          {error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : null}
+
+          {isEditing && (
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleUpdateProfile}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Đang cập nhật...' : 'Lưu thay đổi'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    height: 160,
+    backgroundColor: '#3B82F6',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  headerButtons: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  headerButtonText: {
+    color: 'white',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  content: {
+    padding: 16,
+    marginTop: -80,
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarWrapper: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    overflow: 'hidden',
+    borderWidth: 4,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarPlaceholderText: {
+    color: '#6B7280',
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#3B82F6',
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  infoContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  infoItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  input: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  multilineInput: {
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+  },
+  error: {
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

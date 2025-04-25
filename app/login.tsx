@@ -1,12 +1,7 @@
 import { useState } from 'react';
-import { Box } from '@/components/ui/box';
-import { Button, ButtonText } from '@/components/ui/button';
-import { Input, InputField } from '@/components/ui/input';
-import { Text } from '@/components/ui/text';
-import { VStack } from '@/components/ui/vstack';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { Center } from '@/components/ui/center';
 
 interface UserData {
   address: string;
@@ -45,62 +40,133 @@ export default function LoginScreen() {
   };
 
   return (
-    <Box className="flex-1 bg-white p-4">
-      <Center className="flex-1">
-        <VStack space="xl" className="w-full max-w-sm">
-          <VStack space="xs">
-            <Text className="text-2xl font-bold text-center text-gray-800">
-              Đăng nhập
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Đăng nhập</Text>
+          <Text style={styles.subtitle}>Đăng nhập để tiếp tục mua sắm</Text>
+        </View>
+
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Mật khẩu"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          {error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Text>
-            <Text className="text-center text-gray-500">
-              Đăng nhập để tiếp tục mua sắm
-            </Text>
-          </VStack>
+          </TouchableOpacity>
 
-          <VStack space="md">
-            <Input>
-              <InputField
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </Input>
-
-            <Input>
-              <InputField
-                placeholder="Mật khẩu"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </Input>
-
-            {error ? (
-              <Text className="text-red-500 text-center">{error}</Text>
-            ) : null}
-
-            <Button
-              onPress={handleLogin}
-              disabled={loading}
-              className="bg-blue-500 rounded-full"
-            >
-              <ButtonText className="text-white">
-                {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-              </ButtonText>
-            </Button>
-
-            <Link href="/register" asChild>
-              <Button variant="outline" className="rounded-full">
-                <ButtonText className="text-blue-500">
-                  Chưa có tài khoản? Đăng ký ngay
-                </ButtonText>
-              </Button>
-            </Link>
-          </VStack>
-        </VStack>
-      </Center>
-    </Box>
+          <Link href="/register" asChild>
+            <TouchableOpacity style={styles.registerButton}>
+              <Text style={styles.registerText}>
+                Chưa có tài khoản? Đăng ký ngay
+              </Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  error: {
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  registerButton: {
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  registerText: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

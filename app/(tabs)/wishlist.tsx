@@ -1,18 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Alert, FlatList } from "react-native";
-import { Card } from "@/components/ui/card";
-import { Image } from "@/components/ui/image";
-import { Text } from "@/components/ui/text";
-import { VStack } from "@/components/ui/vstack";
-import { Box } from "@/components/ui/box";
-import { Heading } from "@/components/ui/heading";
-import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
-import { Link, useFocusEffect } from "expo-router";
-import { Button, ButtonText } from "@/components/ui/button";
+import { Alert, FlatList, View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native"; // Thêm ActivityIndicator
+import { Link, useFocusEffect, Stack, router } from "expo-router"; // Thêm Stack, router
 import { useFirestore } from '@/context/storageFirebase';
 import { useAuth } from '@/context/AuthContext';
+import { Ionicons } from '@expo/vector-icons'; // Đã có Ionicons
 
-// Định nghĩa interface cho sản phẩm
+// Định nghĩa interface cho sản phẩm (Giữ nguyên)
 interface Product {
   id: string;
   name: string;
@@ -21,7 +14,7 @@ interface Product {
   description: string;
 }
 
-// Định nghĩa interface cho mục yêu thích
+// Định nghĩa interface cho mục yêu thích (Giữ nguyên)
 interface WishlistItem {
   id: string;
   userId: string;
@@ -46,15 +39,11 @@ export default function WishlistScreen() {
           return;
         }
 
+        // Logic tải wishlist khi đã đăng nhập (Giữ nguyên)
         try {
           setLoading(true);
-          // Lấy tất cả items từ Firestore
           const wishlistData = await getDocuments('wishlist');
-          
-          // Lọc các items của người dùng hiện tại
           const userWishlist = wishlistData.filter(item => item.userId === user.uid);
-          
-          // Lấy thông tin sản phẩm cho mỗi item
           const wishlistItemsWithProducts = await Promise.all(
             userWishlist.map(async (item) => {
               try {
@@ -62,8 +51,8 @@ export default function WishlistScreen() {
                 return {
                   ...item,
                   product: productData ? {
-                    id: productData.id,
-                    name: productData.name || '',
+                    id: item.productId, // Sửa lại lấy ID từ item
+                    name: productData.name || 'Sản phẩm không tên',
                     price: productData.price || 0,
                     images: Array.isArray(productData.images) ? productData.images : [],
                     description: productData.description || ''
@@ -71,14 +60,19 @@ export default function WishlistScreen() {
                 };
               } catch (error) {
                 console.error(`Error fetching product ${item.productId}:`, error);
-                return item;
+                // Trả về item gốc kèm product là undefined để có thể lọc hoặc hiển thị lỗi sau
+                return { ...item, product: undefined };
               }
             })
           );
-          
-          setWishlistItems(wishlistItemsWithProducts as WishlistItem[]);
+           // Lọc bỏ những item không fetch được product
+          const validWishlistItems = wishlistItemsWithProducts.filter(item => item.product) as WishlistItem[];
+          setWishlistItems(validWishlistItems);
+
         } catch (error) {
           console.error("Error loading wishlist:", error);
+          Alert.alert("Lỗi", "Không thể tải danh sách yêu thích.");
+          setWishlistItems([]); // Set rỗng nếu lỗi
         } finally {
           setLoading(false);
         }
@@ -87,30 +81,28 @@ export default function WishlistScreen() {
     }, [user]) // Thêm user vào dependency array
   );
 
+  // Hàm removeFromWishlist (Giữ nguyên)
   const removeFromWishlist = async (itemId: string) => {
     if (!user) return;
-    
     Alert.alert(
       "Xác nhận xóa",
       "Bạn có chắc chắn muốn xóa sản phẩm này khỏi danh sách yêu thích?",
       [
-        {
-          text: "Hủy",
-          style: "cancel",
-        },
+        { text: "Hủy", style: "cancel", },
         {
           text: "Xóa",
           onPress: async () => {
+            // Tạm thời xóa khỏi UI để phản hồi nhanh
+            const originalItems = [...wishlistItems];
+            setWishlistItems(prevItems => prevItems.filter(item => item.id !== itemId));
             try {
               await deleteDocument('wishlist', itemId);
-              
-              // Cập nhật state
-              setWishlistItems(wishlistItems.filter(item => item.id !== itemId));
-              
-              Alert.alert("Thành công", "Sản phẩm đã được xóa khỏi danh sách yêu thích!");
+              // Alert thành công có thể bỏ nếu muốn ít thông báo hơn
+              // Alert.alert("Thành công", "Sản phẩm đã được xóa khỏi danh sách yêu thích!");
             } catch (error) {
               console.error("Error removing item from wishlist:", error);
               Alert.alert("Lỗi", "Không thể xóa sản phẩm. Vui lòng thử lại sau.");
+              setWishlistItems(originalItems); // Khôi phục UI nếu lỗi
             }
           },
           style: "destructive",
@@ -119,74 +111,253 @@ export default function WishlistScreen() {
     );
   };
 
-  const renderWishlistItem = ({ item }: { item: WishlistItem }) => {
+  // Hàm renderWishlistItem (Giữ nguyên, nhưng có thể thêm xử lý item.product undefined)
+ const renderWishlistItem = ({ item }: { item: WishlistItem }) => {
+    // Xử lý trường hợp product không load được (ví dụ sản phẩm đã bị xóa)
     if (!item.product) {
-      return <Text>Sản phẩm không tồn tại</Text>;
+      return (
+         <View style={[styles.wishlistItem, styles.errorItem]}>
+           <View style={styles.productInfoError}>
+               <Text style={styles.errorText}>Lỗi: Sản phẩm không tồn tại</Text>
+               <Text style={styles.errorSubText}>(ID Mục: {item.id})</Text>
+           </View>
+           <TouchableOpacity
+             style={styles.removeButton}
+             onPress={() => removeFromWishlist(item.id)} // Vẫn cho phép xóa mục lỗi
+           >
+             <Ionicons name="trash-outline" size={20} color="#EF4444" />
+           </TouchableOpacity>
+         </View>
+      );
     }
-    
-    return (
-      <Link href={`/product/${item.product.id}`} className="flex-1">
-        <Card className="p-4 mb-4 rounded-lg flex-row items-center">
-          <Image
-            source={{ uri: item.product.images[0] || '' }}
-            className="h-[80px] w-[80px] rounded-md mr-4"
-            alt={`${item.product.name} image`}
-            resizeMode="contain"
-          />
-          <VStack className="flex-1">
-            <Text className="text-md font-semibold">{item.product.name}</Text>
-            <Text className="text-sm text-typography-700" numberOfLines={2}>
-              {item.product.description}
-            </Text>
-            <Heading size="sm" className="mt-1">${item.product.price}</Heading>
-          </VStack>
-          <Button
-            variant="outline"
-            className="px-2 py-1 border-outline-300 ml-2"
-            onPress={() => removeFromWishlist(item.id)}
-          >
-            <ButtonText size="sm" className="text-typography-600">
-              Xóa
-            </ButtonText>
-          </Button>
-        </Card>
-      </Link>
-    );
-  };
 
+    // Render item bình thường
+    return (
+        // Bọc bằng TouchableOpacity thay vì Link để xử lý onPress dễ hơn
+        <TouchableOpacity onPress={() => router.push(`/product/${item.productId}`)} style={styles.linkTouchable}>
+            <View style={styles.wishlistItem}>
+                <Image
+                    source={{ uri: item.product.images?.[0] || 'https://via.placeholder.com/150' }} // Ảnh mặc định
+                    style={styles.productImage}
+                    resizeMode="cover" // Đảm bảo ảnh vừa khung
+                />
+                <View style={styles.productInfo}>
+                    <Text style={styles.productName} numberOfLines={2}>{item.product.name}</Text>
+                    {/* <Text style={styles.productDescription} numberOfLines={1}>
+                        {item.product.description}
+                    </Text> */}
+                    <Text style={styles.productPrice}>
+                        {item.product.price.toLocaleString('vi-VN')}đ
+                    </Text>
+                </View>
+                <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Ngăn sự kiện press lan ra ngoài vào TouchableOpacity cha
+                        removeFromWishlist(item.id);
+                    }}
+                >
+                    <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+
+  // ----- Render Logic -----
+
+  // Trạng thái Loading
   if (loading) {
     return (
-      <Box className="flex-1 justify-center items-center">
-        <Text className="text-lg">Đang tải danh sách yêu thích...</Text>
-      </Box>
+        <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
     );
   }
 
+  // Trạng thái Chưa đăng nhập (Áp dụng style mới)
   if (!user) {
     return (
-      <Box className="flex-1 justify-center items-center">
-        <Text className="text-lg">Vui lòng đăng nhập để xem danh sách yêu thích</Text>
-      </Box>
+      <View style={styles.emptyCartContainer}>
+        <Stack.Screen options={{ title: "Yêu thích", headerRight: () => null }} />
+        <Ionicons name="log-in-outline" size={64} color="#9CA3AF" />
+        <Text style={styles.emptyCartText}>Vui lòng đăng nhập để xem danh sách yêu thích</Text>
+        <TouchableOpacity style={styles.shopButton} onPress={() => router.push('/login')}>
+          <Text style={styles.shopButtonText}>Đăng nhập</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
+  // Trạng thái Đã đăng nhập
   return (
-    <GluestackUIProvider mode="light">
+    <View style={styles.container}>
+       <Stack.Screen options={{ title: "Danh sách yêu thích" }} />
       {wishlistItems.length === 0 ? (
-        <Box className="flex-1 justify-center items-center">
-          <Text className="text-lg">Danh sách yêu thích của bạn đang trống</Text>
-        </Box>
+        // Danh sách yêu thích trống
+        <View style={styles.emptyContainer}>
+           <Ionicons name="heart-outline" size={64} color="#9CA3AF" />
+           <Text style={styles.emptyText}>Danh sách yêu thích của bạn đang trống</Text>
+           <TouchableOpacity style={[styles.shopButton, {marginTop: 20}]} onPress={() => router.push('/')}>
+                <Text style={styles.shopButtonText}>Khám phá sản phẩm</Text>
+            </TouchableOpacity>
+        </View>
       ) : (
-        <VStack className="p-4 flex-1">
-          <Heading size="lg" className="mb-4">Danh sách yêu thích của bạn</Heading>
-          <FlatList
-            data={wishlistItems}
-            renderItem={renderWishlistItem}
-            keyExtractor={(item) => item.id}
-            contentContainerClassName="gap-2"
-          />
-        </VStack>
+        // Có sản phẩm trong danh sách yêu thích
+        <FlatList
+          data={wishlistItems}
+          renderItem={renderWishlistItem}
+          keyExtractor={(item) => item.id}
+          style={styles.listContainer}
+          contentContainerStyle={{ padding: 16 }} // Padding cho toàn bộ list
+          // ItemSeparatorComponent={() => <View style={styles.separator} />} // Thêm đường kẻ nếu muốn
+        />
       )}
-    </GluestackUIProvider>
+    </View>
   );
 }
+
+// ----- StyleSheet -----
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB', // Màu nền chung
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  // --- START: Styles copy từ CartScreen ---
+  emptyCartContainer: { // Đổi tên thành emptyContainer cho dễ hiểu hơn
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: '#F9FAFB',
+  },
+  emptyCartText: { // Đổi tên thành emptyText
+    fontSize: 18,
+    color: '#4B5563',
+    marginTop: 20,
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  shopButton: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  shopButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // --- END: Styles copy từ CartScreen ---
+   emptyContainer: { // Dùng cho cả chưa đăng nhập và wishlist trống
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 30,
+      backgroundColor: '#F9FAFB', // Đồng bộ màu nền
+    },
+    emptyText: {
+      fontSize: 17, // Cỡ chữ phù hợp hơn
+      color: '#6B7280', // Màu xám
+      marginTop: 20,
+      textAlign: 'center', // Căn giữa
+    },
+  listContainer: {
+    flexGrow: 1, // Cho phép list co giãn
+    // gap: 12, // Thay bằng padding trong contentContainerStyle và margin của item
+  },
+  linkTouchable: { // Style cho TouchableOpacity thay vì Link
+    marginBottom: 12, // Khoảng cách giữa các item
+  },
+  wishlistItem: {
+    flexDirection: 'row',
+    alignItems: 'center', // Căn giữa theo chiều dọc
+    backgroundColor: 'white',
+    padding: 12, // Giảm padding chút
+    borderRadius: 10, // Giảm bo góc
+    // marginBottom: 12, // Chuyển margin ra ngoài TouchableOpacity
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, // Giảm độ đổ bóng
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  errorItem: { // Style cho item lỗi
+      borderColor: '#FECACA',
+      backgroundColor: '#FEF2F2',
+      shadowOpacity: 0,
+      elevation: 0,
+  },
+  productInfoError: { // Style cho text lỗi
+      flex: 1,
+      justifyContent: 'center',
+      marginRight: 10, // Khoảng cách với nút xóa
+  },
+  errorText: {
+      color: '#B91C1C',
+      fontSize: 14,
+      fontWeight: '500',
+      marginBottom: 2,
+  },
+  errorSubText: {
+      color: '#DC2626',
+      fontSize: 12,
+  },
+  productImage: {
+    width: 70, // Giảm kích thước ảnh
+    height: 70,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#E5E7EB', // Màu nền fallback
+  },
+  productInfo: {
+    flex: 1, // Chiếm không gian còn lại
+    justifyContent: 'center', // Căn giữa nội dung text
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  productDescription: { // Có thể bỏ nếu không cần
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  productPrice: {
+    fontSize: 15, // Giảm cỡ chữ giá
+    fontWeight: 'bold',
+    color: '#DC2626', // Màu đỏ cho giá
+    marginTop: 4, // Khoảng cách với tên
+  },
+  removeButton: {
+    padding: 8, // Vùng bấm lớn hơn
+    marginLeft: 8, // Khoảng cách với productInfo
+  },
+  separator: { // Style cho đường kẻ nếu cần
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 16, // Thêm margin ngang
+    marginVertical: 4, // Khoảng cách dọc nhỏ
+  },
+});

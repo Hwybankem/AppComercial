@@ -1,10 +1,10 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs, useRouter } from 'expo-router';
+import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-import { Button, ButtonText } from "@/components/ui/button";
 import { useAuth } from '@/context/AuthContext';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
@@ -24,8 +24,6 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
       }}>
       <Tabs.Screen
@@ -35,23 +33,19 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
           headerRight: () => (
             user ? (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <TouchableOpacity 
+                style={styles.outlineButton}
                 onPress={() => router.push('/profile')}
-                className="border-blue-500 rounded-full"
               >
-                <ButtonText className="text-blue-500 text-xs font-medium">Tài khoản</ButtonText>
-              </Button>
+                <Text style={styles.outlineButtonText}>Tài khoản</Text>
+              </TouchableOpacity>
             ) : (
-              <Button 
-                variant="solid" 
-                size="sm" 
+              <TouchableOpacity 
+                style={styles.solidButton}
                 onPress={() => router.push('/login')}
-                className="bg-blue-500 rounded-full"
               >
-                <ButtonText className="text-white text-xs font-medium">Đăng nhập</ButtonText>
-              </Button>
+                <Text style={styles.solidButtonText}>Đăng nhập</Text>
+              </TouchableOpacity>
             )
           ),
         }}
@@ -73,3 +67,31 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 16,
+  },
+  outlineButtonText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  solidButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 16,
+  },
+  solidButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});
